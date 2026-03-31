@@ -21,16 +21,21 @@ import sys
 
 import httpx
 
-from invoicing.clockify import fetch_time_entries
 from invoicing.config import InvoicingSettings
 from invoicing.fakturoid import (
-    create_proforma_invoice,
     delete_invoice,
-    find_subject,
     fire_invoice,
     get_oauth_token,
 )
 from invoicing.slack import send_invoice_notification
+from invoicing.workflows import (
+    build_fakturoid_url,
+    create_invoice_draft,
+    fetch_summary,
+    format_total_amount,
+    require_rate,
+    summary_to_output,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -112,77 +117,28 @@ def prompt_approval() -> bool:
 async def cmd_fetch(args: argparse.Namespace, settings: InvoicingSettings) -> None:
     """Fetch and display time entries from Clockify."""
     async with httpx.AsyncClient(timeout=30.0) as client:
-        summary = await fetch_time_entries(
-            client,
-            settings.clockify_api_key,
-            settings.clockify_base_url,
-            args.start,
-            args.end,
-        )
+        summary = await fetch_summary(client, settings, args.start, args.end)
 
-    # Output as JSON for easy parsing by Claude Code
-    output = {
-        "total_hours": summary.total_hours,
-        "entry_count": len(summary.entries),
-        "period_start": summary.period_start,
-        "period_end": summary.period_end,
-        "by_project": {},
-        "entries": [],
-    }
-    for entry in summary.entries:
-        proj = entry.project_name or "(no project)"
-        output["by_project"].setdefault(proj, 0.0)
-        output["by_project"][proj] = round(
-            output["by_project"][proj] + entry.duration_hours, 2
-        )
-        output["entries"].append(
-            {
-                "description": entry.description,
-                "project": entry.project_name,
-                "hours": entry.duration_hours,
-                "date": entry.start.strftime("%Y-%m-%d"),
-                "billable": entry.billable,
-            }
-        )
-
-    print(json.dumps(output, indent=2, ensure_ascii=False))
+    print(json.dumps(summary_to_output(summary), indent=2, ensure_ascii=False))
 
 
 async def cmd_create(args: argparse.Namespace, settings: InvoicingSettings) -> None:
     """Create a proforma invoice in Fakturoid."""
-    rate = args.rate or settings.default_hourly_rate
-    if rate <= 0:
-        print("Error: hourly rate must be positive. Use --rate or set DEFAULT_HOURLY_RATE.", file=sys.stderr)
+    try:
+        rate = require_rate(args.rate, settings.default_hourly_rate)
+    except ValueError:
+        print(
+            "Error: hourly rate must be positive. Use --rate or set DEFAULT_HOURLY_RATE.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        # Fetch hours
-        summary = await fetch_time_entries(
-            client,
-            settings.clockify_api_key,
-            settings.clockify_base_url,
-            args.start,
-            args.end,
-        )
+        summary = await fetch_summary(client, settings, args.start, args.end)
         if summary.total_hours == 0:
             print(json.dumps({"error": "No billable hours found"}))
             sys.exit(0)
 
-        # Fakturoid auth + subject lookup
-        token = await get_oauth_token(
-            client,
-            settings.fakturoid_base_url,
-            settings.fakturoid_client_id,
-            settings.fakturoid_client_secret,
-        )
-        subject = await find_subject(
-            client,
-            settings.fakturoid_base_url,
-            settings.fakturoid_slug,
-            token,
-            settings.fakturoid_user_agent,
-            settings.fakturoid_subject_name,
-        )
         lines = build_invoice_lines(
             summary.total_hours,
             rate,
@@ -190,13 +146,11 @@ async def cmd_create(args: argparse.Namespace, settings: InvoicingSettings) -> N
             summary.period_start,
             summary.period_end,
         )
-        invoice = await create_proforma_invoice(
+        draft = await create_invoice_draft(
             client,
-            settings.fakturoid_base_url,
-            settings.fakturoid_slug,
-            token,
-            settings.fakturoid_user_agent,
-            subject["id"],
+            settings,
+            summary,
+            rate,
             lines,
         )
 
@@ -204,16 +158,20 @@ async def cmd_create(args: argparse.Namespace, settings: InvoicingSettings) -> N
     print(
         json.dumps(
             {
-                "invoice_id": invoice["id"],
-                "invoice_number": invoice.get("number"),
-                "subject_name": subject["name"],
-                "total_hours": summary.total_hours,
+                "invoice_id": draft.invoice["id"],
+                "invoice_number": draft.invoice.get("number"),
+                "subject_name": draft.subject["name"],
+                "total_hours": draft.summary.total_hours,
                 "rate": rate,
                 "vat_rate": settings.default_vat_rate,
-                "subtotal": str(invoice.get("subtotal", "")),
-                "total": str(invoice.get("total", "")),
+                "subtotal": str(draft.invoice.get("subtotal", "")),
+                "total": str(draft.invoice.get("total", "")),
                 "status": "proforma",
-                "fakturoid_url": f"{settings.fakturoid_base_url}/i/{settings.fakturoid_slug}/{invoice['id']}",
+                "fakturoid_url": build_fakturoid_url(
+                    settings.fakturoid_base_url,
+                    settings.fakturoid_slug,
+                    draft.invoice["id"],
+                ),
             },
             indent=2,
             ensure_ascii=False,
@@ -287,21 +245,16 @@ async def cmd_notify(args: argparse.Namespace, settings: InvoicingSettings) -> N
 
 async def cmd_run(args: argparse.Namespace, settings: InvoicingSettings) -> None:
     """Run the full invoicing pipeline with terminal approval prompt."""
-    rate = args.rate or settings.default_hourly_rate
-    if rate <= 0:
+    try:
+        rate = require_rate(args.rate, settings.default_hourly_rate)
+    except ValueError:
         logger.error("Hourly rate must be positive. Set --rate or DEFAULT_HOURLY_RATE in .env")
         sys.exit(1)
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         # Step 1: Clockify
         print("\n[1/4] Fetching time entries from Clockify...")
-        summary = await fetch_time_entries(
-            client,
-            settings.clockify_api_key,
-            settings.clockify_base_url,
-            args.start,
-            args.end,
-        )
+        summary = await fetch_summary(client, settings, args.start, args.end)
         print(f"  Found {len(summary.entries)} entries totalling {summary.total_hours:.2f} hours")
 
         if summary.total_hours == 0:
@@ -323,20 +276,6 @@ async def cmd_run(args: argparse.Namespace, settings: InvoicingSettings) -> None
 
         # Step 2: Fakturoid — create proforma
         print("\n[2/4] Creating proforma invoice in Fakturoid...")
-        token = await get_oauth_token(
-            client,
-            settings.fakturoid_base_url,
-            settings.fakturoid_client_id,
-            settings.fakturoid_client_secret,
-        )
-        subject = await find_subject(
-            client,
-            settings.fakturoid_base_url,
-            settings.fakturoid_slug,
-            token,
-            settings.fakturoid_user_agent,
-            settings.fakturoid_subject_name,
-        )
         lines = build_invoice_lines(
             summary.total_hours,
             rate,
@@ -344,24 +283,22 @@ async def cmd_run(args: argparse.Namespace, settings: InvoicingSettings) -> None
             summary.period_start,
             summary.period_end,
         )
-        invoice = await create_proforma_invoice(
+        draft = await create_invoice_draft(
             client,
-            settings.fakturoid_base_url,
-            settings.fakturoid_slug,
-            token,
-            settings.fakturoid_user_agent,
-            subject["id"],
+            settings,
+            summary,
+            rate,
             lines,
         )
-        print(f"  Subject: {subject['name']} (id={subject['id']})")
+        print(f"  Subject: {draft.subject['name']} (id={draft.subject['id']})")
         print(
             format_preview(
-                subject["name"],
+                draft.subject["name"],
                 f"{args.start} to {args.end}",
-                summary.total_hours,
+                draft.summary.total_hours,
                 rate,
                 settings.default_vat_rate,
-                invoice_number=invoice.get("number"),
+                invoice_number=draft.invoice.get("number"),
             )
         )
 
@@ -371,20 +308,20 @@ async def cmd_run(args: argparse.Namespace, settings: InvoicingSettings) -> None
                 client,
                 settings.fakturoid_base_url,
                 settings.fakturoid_slug,
-                token,
+                draft.token,
                 settings.fakturoid_user_agent,
-                invoice["id"],
+                draft.invoice["id"],
             )
-            print(f"  Invoice #{invoice.get('number')} finalized.")
+            print(f"  Invoice #{draft.invoice.get('number')} finalized.")
         else:
             print("  Rejected. Deleting proforma...")
             await delete_invoice(
                 client,
                 settings.fakturoid_base_url,
                 settings.fakturoid_slug,
-                token,
+                draft.token,
                 settings.fakturoid_user_agent,
-                invoice["id"],
+                draft.invoice["id"],
             )
             print("  Proforma deleted.")
             sys.exit(0)
@@ -393,15 +330,19 @@ async def cmd_run(args: argparse.Namespace, settings: InvoicingSettings) -> None
         if settings.slack_webhook_url:
             print("\n[4/4] Sending Slack notification...")
             try:
-                invoice_url = f"{settings.fakturoid_base_url}/i/{settings.fakturoid_slug}/{invoice['id']}"
+                invoice_url = build_fakturoid_url(
+                    settings.fakturoid_base_url,
+                    settings.fakturoid_slug,
+                    draft.invoice["id"],
+                )
                 await send_invoice_notification(
                     client,
                     settings.slack_webhook_url,
-                    invoice_number=str(invoice.get("number", "")),
-                    total_amount=f"{summary.total_hours * rate:,.0f} CZK",
-                    total_hours=summary.total_hours,
+                    invoice_number=str(draft.invoice.get("number", "")),
+                    total_amount=format_total_amount(draft.summary.total_hours, rate),
+                    total_hours=draft.summary.total_hours,
                     period=f"{args.start} — {args.end}",
-                    client_name=subject["name"],
+                    client_name=draft.subject["name"],
                     invoice_url=invoice_url,
                 )
                 print("  Notification sent.")
