@@ -23,5 +23,6 @@ build/
 .coverage
 htmlcov/
 
-# Claude
-.claude/
+# Claude (share skills/agents, keep settings local)
+.claude/settings.json
+.claude/settings.local.json
