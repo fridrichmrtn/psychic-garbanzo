@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 from argparse import Namespace
@@ -8,6 +9,8 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 from invoicing.__main__ import (
+    _positive_float,
+    _valid_date,
     build_invoice_lines,
     cmd_create,
     cmd_fetch,
@@ -678,3 +681,35 @@ async def test_cmd_run_dry_run_exits_without_creating(
     output = capsys.readouterr().out
     assert "DRY RUN" in output
     assert "INVOICE PREVIEW" in output
+
+
+# ---------------------------------------------------------------------------
+# _valid_date / _positive_float validators
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["2026-03-01", "2000-01-01", "2099-12-31"])
+def test_valid_date_accepts_canonical(value: str) -> None:
+    assert _valid_date(value) == value
+
+
+@pytest.mark.parametrize("value", ["2026-3-1", "not-a-date", "2026/03/01", ""])
+def test_valid_date_rejects_bad_input(value: str) -> None:
+    with pytest.raises(argparse.ArgumentTypeError, match="Expected YYYY-MM-DD"):
+        _valid_date(value)
+
+
+@pytest.mark.parametrize("value,expected", [("100", 100.0), ("0.5", 0.5), ("1", 1.0)])
+def test_positive_float_accepts_valid(value: str, expected: float) -> None:
+    assert _positive_float(value) == expected
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "-inf"])
+def test_positive_float_rejects_invalid(value: str) -> None:
+    with pytest.raises(argparse.ArgumentTypeError, match="positive finite number"):
+        _positive_float(value)
+
+
+def test_positive_float_rejects_non_numeric() -> None:
+    with pytest.raises(ValueError):
+        _positive_float("abc")

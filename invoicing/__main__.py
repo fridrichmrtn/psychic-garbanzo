@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import logging
+import math
 import sys
 from datetime import datetime
 
@@ -519,8 +520,12 @@ async def cmd_run(args: argparse.Namespace, settings: InvoicingSettings) -> None
 def _valid_date(value: str) -> str:
     """Validate that value is a YYYY-MM-DD date string."""
     try:
-        datetime.strptime(value, "%Y-%m-%d")
+        dt = datetime.strptime(value, "%Y-%m-%d")
     except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"Invalid date format: '{value}'. Expected YYYY-MM-DD."
+        )
+    if dt.strftime("%Y-%m-%d") != value:
         raise argparse.ArgumentTypeError(
             f"Invalid date format: '{value}'. Expected YYYY-MM-DD."
         )
@@ -530,8 +535,10 @@ def _valid_date(value: str) -> str:
 def _positive_float(value: str) -> float:
     """Validate that value is a positive number."""
     f = float(value)
-    if f <= 0:
-        raise argparse.ArgumentTypeError(f"Rate must be positive, got {f}")
+    if not math.isfinite(f) or f <= 0:
+        raise argparse.ArgumentTypeError(
+            f"Rate must be a positive finite number, got '{value}'"
+        )
     return f
 
 
