@@ -23,6 +23,7 @@ Freelance invoicing pipeline: **Clockify** (time tracking) → **Fakturoid** (Cz
 3. Copy the **Client ID** and **Client Secret** — these become `FAKTUROID_CLIENT_ID` and `FAKTUROID_CLIENT_SECRET`
 4. Note your account slug (the subdomain in your Fakturoid URL, e.g. `martinfridrich`) — this becomes `FAKTUROID_SLUG`
 5. Set `FAKTUROID_SUBJECT_NAME` to the client company name that invoices are issued to
+6. Ensure your default payment terms (splatnost) are configured in **Nastavení** — either under **Doklady** (invoice defaults) or **Dodavatel** (supplier details). The tool does not set due dates explicitly, so invoices inherit whatever default is configured there
 
 ### Slack App
 
@@ -92,6 +93,28 @@ uv run python -m invoicing slack-delete --ts 1234567890.123456 --file-id F0123AB
 ```
 
 All subcommands output JSON to stdout.
+
+## Claude Code Skills
+
+When using this project with [Claude Code](https://docs.anthropic.com/en/docs/claude-code), four slash commands are available:
+
+### `/preview [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N]`
+
+Fetch hours from Clockify and display a cost summary. Read-only — no invoice is created.
+Defaults: current month, `DEFAULT_HOURLY_RATE` from `.env`.
+
+### `/invoice [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N] [--dry-run]`
+
+Full pipeline: fetch hours → show preview → ask for approval → create proforma in Fakturoid → fire → notify via Slack.
+Defaults: current month, `DEFAULT_HOURLY_RATE` from `.env`. Use `--dry-run` to stop after preview.
+
+### `/notify --invoice-id ID` or `/notify --invoice-number FV-123 --hours 10 --amount "1000 CZK" --client "Acme" --period "..."`
+
+Send (or re-send) an invoice notification to Slack. With `--invoice-id`, details and PDF are fetched automatically. The manual form sends a text-only message.
+
+### `/yolo [--rate N]`
+
+Invoice the last complete calendar month — no preview, no approval. Fetches hours, creates and fires the invoice, and notifies via Slack in one shot.
 
 ## Running Tests
 
