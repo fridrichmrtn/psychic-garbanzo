@@ -82,6 +82,7 @@ async def create_proforma_invoice(
     user_agent: str,
     subject_id: int,
     lines: list[dict[str, Any]],
+    issued_on: str | None = None,
 ) -> dict[str, Any]:
     """
     Create a proforma (draft) invoice in Fakturoid.
@@ -93,11 +94,13 @@ async def create_proforma_invoice(
         Created invoice dict from Fakturoid API.
     """
     headers = {**_headers(token, user_agent), "Content-Type": "application/json"}
-    payload = {
+    payload: dict[str, Any] = {
         "subject_id": subject_id,
         "proforma": True,
         "lines": lines,
     }
+    if issued_on:
+        payload["issued_on"] = issued_on
     resp = await client.post(
         f"{base_url}/api/v3/accounts/{slug}/invoices.json",
         headers=headers,

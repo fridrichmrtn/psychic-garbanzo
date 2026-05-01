@@ -16,6 +16,7 @@ Fire-and-forget invoicing: fetch hours for the last complete month, create profo
 Compute the **last complete calendar month** relative to today's date:
 - **Start**: first day of previous month (e.g. if today is 2026-04-15, start = 2026-03-01)
 - **End**: last day of previous month (e.g. 2026-03-31)
+- **Issue date** (`issued_on`): last day of the invoiced month (= end). E.g. running on 2026-05-01 → issued_on 2026-04-30.
 
 ## Steps
 

@@ -30,6 +30,8 @@ Create an OAuth app so the tool can issue invoices on your behalf.
 
 > **Note:** Ensure your default payment terms (splatnost) are configured in **Nastavení** — either under **Doklady** (invoice defaults) or **Dodavatel** (supplier details). The tool does not set due dates explicitly, so invoices inherit whatever default is configured there.
 
+> **Note:** Invoice issue date (`issued_on`) is set to the last day of the invoiced period's calendar month. For a period ending 2026-04-15, the proforma is issued 2026-04-30; running `/yolo` on May 1 for April produces an invoice issued 2026-04-30.
+
 ### Slack App
 
 Create a bot to post invoice notifications and upload PDFs.

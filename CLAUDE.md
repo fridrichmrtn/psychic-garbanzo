@@ -67,4 +67,5 @@ If user rejects at step 2, stop. If something goes wrong after step 3, use `dele
 - JSON output from CLI subcommands for machine readability
 - No classes where functions suffice — keep it flat and functional
 - Currency is CZK, VAT default 0% (configurable via DEFAULT_VAT_RATE)
+- Invoice `issued_on` is the last day of the calendar month of `period_end` (set in `invoicing/workflows.py`); due date inherits the Fakturoid splatnost default
 - `uv run` to execute anything (not raw `python`)

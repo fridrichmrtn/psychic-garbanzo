@@ -27,6 +27,7 @@ Present the same summary as /preview (hours, project breakdown, rate, subtotal, 
 ### 3. Create proforma invoice
 Run: `uv run python -m invoicing create --start <start> --end <end> --rate <rate>`
 Parse the JSON output to get `invoice_id`, `invoice_number`, `total`, `fakturoid_url`.
+The proforma is created with `issued_on` = last day of the calendar month of `--end`.
 
 ### 4. Fire the invoice
 Run: `uv run python -m invoicing fire --invoice-id <invoice_id>`

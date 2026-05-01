@@ -27,6 +27,8 @@ Fetch hours from Clockify and show a cost preview. No invoices are created — t
      - Total in CZK
 5. Do NOT create, fire, or modify anything. This is preview only.
 
+Note: the actual invoice (when run via `/invoice` or `/yolo`) will be issued on the last day of the period's calendar month, not today.
+
 ## Output Format
 
 Present as a clean table/summary in the terminal. Example:
