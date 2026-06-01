@@ -28,7 +28,7 @@ Create an OAuth app so the tool can issue invoices on your behalf.
 4. Note your account slug (the subdomain in your Fakturoid URL, e.g. `martinfridrich`) — this becomes `FAKTUROID_SLUG`
 5. Set `FAKTUROID_SUBJECT_NAME` to the client company name that invoices are issued to
 
-> **Note:** Ensure your default payment terms (splatnost) are configured in **Nastavení** — either under **Doklady** (invoice defaults) or **Dodavatel** (supplier details). The tool does not set due dates explicitly, so invoices inherit whatever default is configured there.
+> **Note:** Ensure your default payment terms (splatnost) are configured in **Nastavení** — either under **Doklady** (invoice defaults) or **Dodavatel** (supplier details). By default invoices inherit whatever payment term is configured there; pass `--due-on YYYY-MM-DD` to set an explicit maturity date for a created proforma.
 
 > **Note:** Invoice issue date (`issued_on`) is set to the last day of the invoiced period's calendar month. For a period ending 2026-04-15, the proforma is issued 2026-04-30; running `/yolo` on May 1 for April produces an invoice issued 2026-04-30.
 
@@ -83,6 +83,14 @@ Create a proforma invoice in Fakturoid:
 uv run python -m invoicing create --start 2026-03-01 --end 2026-03-31 --rate 100
 ```
 
+Optional create flags:
+
+```bash
+uv run python -m invoicing create \
+  --start 2026-05-01 --end 2026-05-31 --rate 100 \
+  --due-on 2026-06-20 --line-name EMOTIKA_SELFCODE
+```
+
 Finalize the proforma:
 
 ```bash
@@ -131,13 +139,13 @@ When using this project with [Claude Code](https://docs.anthropic.com/en/docs/cl
 **`/preview`** `[--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N]`
 Fetch hours from Clockify and display a cost summary. Read-only — no invoice is created.
 
-**`/invoice`** `[--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N] [--dry-run]`
+**`/invoice`** `[--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N] [--due-on YYYY-MM-DD] [--line-name NAME] [--dry-run]`
 Full pipeline: fetch hours → show preview → ask for approval → create proforma → fire → notify via Slack.
 
 **`/notify`** `--invoice-id ID` or `--invoice-number FV-123 --hours 10 --amount "1000 CZK" --client "Acme" --period "..."`
 Send or re-send an invoice notification to Slack. With `--invoice-id`, details and PDF are fetched automatically. The manual form sends a text-only message.
 
-**`/yolo`** `[--rate N]`
+**`/yolo`** `[--rate N] [--due-on YYYY-MM-DD] [--line-name NAME]`
 Invoice the last complete calendar month — no preview, no approval. Fetches hours, creates and fires the invoice, and notifies via Slack in one shot.
 
 > All commands default to the current month and `DEFAULT_HOURLY_RATE` from `.env` when arguments are omitted.

@@ -12,6 +12,8 @@ Full invoicing pipeline: fetch hours, preview, get approval, create proforma, fi
 - `--start YYYY-MM-DD` (optional, defaults to first day of current month)
 - `--end YYYY-MM-DD` (optional, defaults to last day of current month)
 - `--rate N` (optional, uses DEFAULT_HOURLY_RATE from .env)
+- `--due-on YYYY-MM-DD` (optional, sets invoice maturity date)
+- `--line-name NAME` (optional, exact name to use on every invoice line)
 - `--dry-run` (optional, stop after preview — same as /preview)
 
 ## Steps
@@ -25,9 +27,10 @@ Present the same summary as /preview (hours, project breakdown, rate, subtotal, 
 **Ask the user explicitly**: "Create this invoice?" — do NOT proceed without a clear "yes".
 
 ### 3. Create proforma invoice
-Run: `uv run python -m invoicing create --start <start> --end <end> --rate <rate>`
-Parse the JSON output to get `invoice_id`, `invoice_number`, `total`, `fakturoid_url`.
-The proforma is created with `issued_on` = last day of the calendar month of `--end`.
+Run: `uv run python -m invoicing create --start <start> --end <end> --rate <rate> [--due-on <due-on>] [--line-name "<line-name>"]`
+Pass `--due-on` and `--line-name` through when the user provided them.
+Parse the JSON output to get `invoice_id`, `invoice_number`, `total`, `issued_on`, `due_on`, `fakturoid_url`.
+The proforma is created with `issued_on` = last day of the calendar month of `--end`; `due_on` is explicit only when `--due-on` is passed, otherwise Fakturoid uses the account default.
 
 ### 4. Fire the invoice
 Run: `uv run python -m invoicing fire --invoice-id <invoice_id>`
