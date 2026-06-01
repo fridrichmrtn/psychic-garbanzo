@@ -23,6 +23,7 @@ from invoicing.clockify import ClockifySummary, TimeEntry
 from invoicing.workflows import (
     InvoiceDraftResult,
     build_fakturoid_url,
+    create_invoice_draft,
     format_total_amount,
     require_rate,
     summary_to_output,
@@ -95,6 +96,32 @@ def test_build_invoice_lines_output_shape() -> None:
         },
         {
             "name": "Project B (2026-03-01 — 2026-03-31)",
+            "quantity": 0.75,
+            "unit_name": "hrs",
+            "unit_price": 100.0,
+            "vat_rate": 21,
+        },
+    ]
+
+
+def test_build_invoice_lines_line_name_override_is_exact() -> None:
+    assert build_invoice_lines(
+        {"Project A": 1.25, "Project B": 0.75},
+        100.0,
+        21,
+        "2026-05-01",
+        "2026-05-31",
+        line_name="EMOTIKA_SELFCODE",
+    ) == [
+        {
+            "name": "EMOTIKA_SELFCODE",
+            "quantity": 1.25,
+            "unit_name": "hrs",
+            "unit_price": 100.0,
+            "vat_rate": 21,
+        },
+        {
+            "name": "EMOTIKA_SELFCODE",
             "quantity": 0.75,
             "unit_name": "hrs",
             "unit_price": 100.0,
@@ -223,6 +250,47 @@ async def test_cmd_create_prints_invoice_payload(
 
 
 @pytest.mark.asyncio
+async def test_cmd_create_passes_due_on_and_line_name(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    settings: SimpleNamespace,
+    summary: ClockifySummary,
+) -> None:
+    draft = InvoiceDraftResult(
+        summary=summary,
+        token="token",
+        subject={"id": 7, "name": "Acme Corp"},
+        invoice={"id": 42, "number": "2026001"},
+        rate=100.0,
+        vat_rate=21,
+    )
+    create_mock = AsyncMock(return_value=draft)
+    monkeypatch.setattr(
+        "invoicing.__main__.fetch_summary", AsyncMock(return_value=summary)
+    )
+    monkeypatch.setattr("invoicing.__main__.create_invoice_draft", create_mock)
+
+    await cmd_create(
+        Namespace(
+            start="2026-05-01",
+            end="2026-05-31",
+            rate=100.0,
+            due_on="2026-06-20",
+            line_name="EMOTIKA_SELFCODE",
+        ),
+        settings,
+    )
+
+    lines = create_mock.await_args.args[4]
+    assert [line["name"] for line in lines] == [
+        "EMOTIKA_SELFCODE",
+        "EMOTIKA_SELFCODE",
+    ]
+    assert create_mock.await_args.kwargs["due_on"] == "2026-06-20"
+    json.loads(capsys.readouterr().out)
+
+
+@pytest.mark.asyncio
 async def test_cmd_create_exits_when_no_hours(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -256,6 +324,73 @@ async def test_cmd_create_exits_when_no_hours(
 
     assert exc.value.code == 0
     assert json.loads(capsys.readouterr().out) == {"error": "No billable hours found"}
+
+
+@pytest.mark.asyncio
+async def test_create_invoice_draft_translates_due_on_to_due_days(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    summary: ClockifySummary,
+) -> None:
+    create_mock = AsyncMock(return_value={"id": 42, "number": "2026001"})
+    monkeypatch.setattr(
+        "invoicing.workflows.get_oauth_token", AsyncMock(return_value="tok")
+    )
+    monkeypatch.setattr(
+        "invoicing.workflows.find_subject",
+        AsyncMock(return_value={"id": 7, "name": "Acme Corp"}),
+    )
+    monkeypatch.setattr("invoicing.workflows.create_proforma_invoice", create_mock)
+    may_summary = summary.model_copy(
+        update={"period_start": "2026-05-01", "period_end": "2026-05-31"}
+    )
+
+    await create_invoice_draft(
+        AsyncMock(),
+        settings,
+        may_summary,
+        100.0,
+        [{"name": "Work", "quantity": 2, "unit_price": 100}],
+        due_on="2026-06-20",
+    )
+
+    assert create_mock.await_args.kwargs["issued_on"] == "2026-05-31"
+    assert create_mock.await_args.kwargs["due"] == 20
+
+
+@pytest.mark.asyncio
+async def test_create_invoice_draft_rejects_due_on_before_issue_date(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: SimpleNamespace,
+    summary: ClockifySummary,
+) -> None:
+    get_token_mock = AsyncMock(return_value="tok")
+    create_mock = AsyncMock(return_value={"id": 42, "number": "2026001"})
+    monkeypatch.setattr("invoicing.workflows.get_oauth_token", get_token_mock)
+    monkeypatch.setattr(
+        "invoicing.workflows.find_subject",
+        AsyncMock(return_value={"id": 7, "name": "Acme Corp"}),
+    )
+    monkeypatch.setattr("invoicing.workflows.create_proforma_invoice", create_mock)
+    may_summary = summary.model_copy(
+        update={"period_start": "2026-05-01", "period_end": "2026-05-31"}
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Maturity date 2026-05-30 is before issue date 2026-05-31.",
+    ):
+        await create_invoice_draft(
+            AsyncMock(),
+            settings,
+            may_summary,
+            100.0,
+            [{"name": "Work", "quantity": 2, "unit_price": 100}],
+            due_on="2026-05-30",
+        )
+
+    get_token_mock.assert_not_awaited()
+    create_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio

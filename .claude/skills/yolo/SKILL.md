@@ -10,6 +10,8 @@ Fire-and-forget invoicing: fetch hours for the last complete month, create profo
 ## Arguments
 
 - `--rate N` (optional, uses DEFAULT_HOURLY_RATE from .env)
+- `--due-on YYYY-MM-DD` (optional, sets invoice maturity date)
+- `--line-name NAME` (optional, exact name to use on every invoice line)
 
 ## Date Calculation
 
@@ -27,8 +29,9 @@ Run: `uv run python -m invoicing fetch --start <start> --end <end>`
 Parse the JSON output. If `total_hours` is 0, tell the user "No hours tracked for <period>" and stop.
 
 ### 2. Create proforma invoice
-Run: `uv run python -m invoicing create --start <start> --end <end> --rate <rate>`
-Parse the JSON output to get `invoice_id`, `invoice_number`, `total`, `fakturoid_url`.
+Run: `uv run python -m invoicing create --start <start> --end <end> --rate <rate> [--due-on <due-on>] [--line-name "<line-name>"]`
+Pass `--due-on` and `--line-name` through when the user provided them.
+Parse the JSON output to get `invoice_id`, `invoice_number`, `total`, `issued_on`, `due_on`, `fakturoid_url`.
 
 ### 3. Fire the invoice
 Run: `uv run python -m invoicing fire --invoice-id <invoice_id>`

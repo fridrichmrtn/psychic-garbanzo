@@ -109,6 +109,17 @@ async def create_invoice_draft(
     into Fakturoid's ``due`` day count relative to ``issued_on`` (Fakturoid
     computes ``due_on`` itself and treats it as read-only).
     """
+    period_end = date.fromisoformat(summary.period_end)
+    last_day = calendar.monthrange(period_end.year, period_end.month)[1]
+    issued_date = period_end.replace(day=last_day)
+    issued_on = issued_date.isoformat()
+    due: int | None = None
+    if due_on:
+        due = (date.fromisoformat(due_on) - issued_date).days
+        if due < 0:
+            raise ValueError(
+                f"Maturity date {due_on} is before issue date {issued_on}."
+            )
     token = await get_oauth_token(
         client,
         settings.fakturoid_base_url,
@@ -123,17 +134,6 @@ async def create_invoice_draft(
         settings.fakturoid_user_agent,
         settings.fakturoid_subject_name,
     )
-    period_end = date.fromisoformat(summary.period_end)
-    last_day = calendar.monthrange(period_end.year, period_end.month)[1]
-    issued_date = period_end.replace(day=last_day)
-    issued_on = issued_date.isoformat()
-    due: int | None = None
-    if due_on:
-        due = (date.fromisoformat(due_on) - issued_date).days
-        if due < 0:
-            raise ValueError(
-                f"Maturity date {due_on} is before issue date {issued_on}."
-            )
     invoice = await create_proforma_invoice(
         client,
         settings.fakturoid_base_url,

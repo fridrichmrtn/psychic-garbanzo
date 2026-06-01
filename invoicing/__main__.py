@@ -61,12 +61,16 @@ def build_invoice_lines(
 ) -> list[dict]:
     """Build Fakturoid invoice line items with per-project breakdown.
 
-    When ``line_name`` is given, every line uses that name instead of the
-    project name, preserving the per-project hour breakdown across lines.
+    When ``line_name`` is given, every line uses that exact name, preserving
+    the per-project hour breakdown across lines.
     """
     return [
         {
-            "name": f"{line_name or project} ({period_start} — {period_end})",
+            "name": (
+                line_name
+                if line_name is not None
+                else f"{project} ({period_start} — {period_end})"
+            ),
             "quantity": hours,
             "unit_name": "hrs",
             "unit_price": rate,
