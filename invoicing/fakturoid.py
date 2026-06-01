@@ -83,6 +83,7 @@ async def create_proforma_invoice(
     subject_id: int,
     lines: list[dict[str, Any]],
     issued_on: str | None = None,
+    due: int | None = None,
 ) -> dict[str, Any]:
     """
     Create a proforma (draft) invoice in Fakturoid.
@@ -101,6 +102,8 @@ async def create_proforma_invoice(
     }
     if issued_on:
         payload["issued_on"] = issued_on
+    if due is not None:
+        payload["due"] = due
     resp = await client.post(
         f"{base_url}/api/v3/accounts/{slug}/invoices.json",
         headers=headers,

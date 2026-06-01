@@ -130,6 +130,27 @@ async def test_create_proforma_invoice_returns_invoice() -> None:
     call_kwargs = client.post.call_args
     assert call_kwargs.kwargs["json"]["proforma"] is True
     assert call_kwargs.kwargs["json"]["subject_id"] == 7
+    # No due specified -> Fakturoid inherits the account default.
+    assert "due" not in call_kwargs.kwargs["json"]
+
+
+@pytest.mark.asyncio
+async def test_create_proforma_invoice_sends_due_when_given() -> None:
+    invoice = {"id": 42, "number": "2026001", "total": "200"}
+    client = _mock_client(post=_mock_response(invoice))
+
+    await create_proforma_invoice(
+        client,
+        "https://fakturoid.example",
+        "slug",
+        "tok",
+        "agent",
+        subject_id=7,
+        lines=[{"name": "Work", "quantity": 2, "unit_price": 100}],
+        due=20,
+    )
+
+    assert client.post.call_args.kwargs["json"]["due"] == 20
 
 
 # -- fire_invoice --

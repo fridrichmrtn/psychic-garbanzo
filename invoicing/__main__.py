@@ -57,11 +57,16 @@ def build_invoice_lines(
     vat_rate: int,
     period_start: str,
     period_end: str,
+    line_name: str | None = None,
 ) -> list[dict]:
-    """Build Fakturoid invoice line items with per-project breakdown."""
+    """Build Fakturoid invoice line items with per-project breakdown.
+
+    When ``line_name`` is given, every line uses that name instead of the
+    project name, preserving the per-project hour breakdown across lines.
+    """
     return [
         {
-            "name": f"{project} ({period_start} — {period_end})",
+            "name": f"{line_name or project} ({period_start} — {period_end})",
             "quantity": hours,
             "unit_name": "hrs",
             "unit_price": rate,
@@ -165,6 +170,7 @@ async def cmd_create(args: argparse.Namespace, settings: InvoicingSettings) -> N
             settings.default_vat_rate,
             summary.period_start,
             summary.period_end,
+            line_name=getattr(args, "line_name", None),
         )
         draft = await create_invoice_draft(
             client,
@@ -172,6 +178,7 @@ async def cmd_create(args: argparse.Namespace, settings: InvoicingSettings) -> N
             summary,
             rate,
             lines,
+            due_on=getattr(args, "due_on", None),
         )
 
     # Output for Claude Code to pick up
@@ -186,6 +193,8 @@ async def cmd_create(args: argparse.Namespace, settings: InvoicingSettings) -> N
                 "vat_rate": settings.default_vat_rate,
                 "subtotal": str(draft.invoice.get("subtotal", "")),
                 "total": str(draft.invoice.get("total", "")),
+                "issued_on": draft.invoice.get("issued_on"),
+                "due_on": draft.invoice.get("due_on"),
                 "status": "proforma",
                 "fakturoid_url": build_fakturoid_url(
                     settings.fakturoid_base_url,
@@ -581,6 +590,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--end", required=True, type=_valid_date, help="Period end (YYYY-MM-DD)"
     )
     create_p.add_argument("--rate", type=_positive_float, help="Hourly rate in CZK")
+    create_p.add_argument(
+        "--due-on",
+        type=_valid_date,
+        help="Maturity/due date (YYYY-MM-DD); converted to Fakturoid 'due' days",
+    )
+    create_p.add_argument(
+        "--line-name",
+        help="Override the name on every invoice line (keeps per-project breakdown)",
+    )
 
     # Step: fire (finalize)
     fire_p = sub.add_parser("fire", help="Finalize a proforma invoice")

@@ -215,6 +215,8 @@ async def test_cmd_create_prints_invoice_payload(
         "vat_rate": 21,
         "subtotal": "200",
         "total": "242",
+        "issued_on": None,
+        "due_on": None,
         "status": "proforma",
         "fakturoid_url": "https://fakturoid.example/acme/invoices/42",
     }
