@@ -13,7 +13,7 @@ Full invoicing pipeline: fetch hours, preview, get approval, create proforma, fi
 - `--end YYYY-MM-DD` (optional, defaults to last day of current month)
 - `--rate N` (optional, uses DEFAULT_HOURLY_RATE from .env)
 - `--due-on YYYY-MM-DD` (optional, sets invoice maturity date)
-- `--line-name NAME` (optional, exact name to use on every invoice line)
+- `--line-name NAME` (optional, exact name for the single invoice line; can't be combined with `--by-project`)
 - `--by-project` (optional, one line per Clockify project instead of a single summary line)
 - `--dry-run` (optional, stop after preview — same as /preview)
 

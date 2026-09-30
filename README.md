@@ -141,13 +141,13 @@ When using this project with [Claude Code](https://docs.anthropic.com/en/docs/cl
 **`/preview`** `[--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N]`
 Fetch hours from Clockify and display a cost summary. Read-only — no invoice is created.
 
-**`/invoice`** `[--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N] [--due-on YYYY-MM-DD] [--line-name NAME] [--by-project] [--dry-run]`
+**`/invoice`** `[--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N] [--due-on YYYY-MM-DD] [--line-name NAME | --by-project] [--dry-run]`
 Full pipeline: fetch hours → show preview → ask for approval → create proforma → fire → notify via Slack.
 
 **`/notify`** `--invoice-id ID` or `--invoice-number FV-123 --hours 10 --amount "1000 CZK" --client "Acme" --period "..."`
 Send or re-send an invoice notification to Slack. With `--invoice-id`, details and PDF are fetched automatically. The manual form sends a text-only message.
 
-**`/yolo`** `[--rate N] [--due-on YYYY-MM-DD] [--line-name NAME] [--by-project]`
+**`/yolo`** `[--rate N] [--due-on YYYY-MM-DD] [--line-name NAME | --by-project]`
 Invoice the last complete calendar month — no preview, no approval. Fetches hours, creates and fires the invoice, and notifies via Slack in one shot.
 
 > All commands default to the current month and `DEFAULT_HOURLY_RATE` from `.env` when arguments are omitted.

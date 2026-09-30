@@ -12,6 +12,7 @@ from invoicing.__main__ import (
     _positive_float,
     _valid_date,
     build_invoice_lines,
+    build_parser,
     cmd_create,
     cmd_fetch,
     cmd_fire,
@@ -246,11 +247,26 @@ async def test_cmd_create_prints_invoice_payload(
 
 
 @pytest.mark.asyncio
-async def test_cmd_create_passes_due_on_and_line_name(
+@pytest.mark.parametrize(
+    ("flags", "names"),
+    [
+        ({"line_name": "EMOTIKA_SELFCODE"}, ["EMOTIKA_SELFCODE"]),
+        (
+            {"by_project": True},
+            [
+                "Project A (2026-03-01 — 2026-03-31)",
+                "(no project) (2026-03-01 — 2026-03-31)",
+            ],
+        ),
+    ],
+)
+async def test_cmd_create_passes_flags_through(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     settings: SimpleNamespace,
     summary: ClockifySummary,
+    flags: dict,
+    names: list[str],
 ) -> None:
     draft = InvoiceDraftResult(
         summary=summary,
@@ -268,19 +284,37 @@ async def test_cmd_create_passes_due_on_and_line_name(
 
     await cmd_create(
         Namespace(
-            start="2026-05-01",
-            end="2026-05-31",
+            start="2026-03-01",
+            end="2026-03-31",
             rate=100.0,
             due_on="2026-06-20",
-            line_name="EMOTIKA_SELFCODE",
+            **flags,
         ),
         settings,
     )
 
     lines = create_mock.await_args.args[4]
-    assert [line["name"] for line in lines] == ["EMOTIKA_SELFCODE"]
+    assert [line["name"] for line in lines] == names
     assert create_mock.await_args.kwargs["due_on"] == "2026-06-20"
     json.loads(capsys.readouterr().out)
+
+
+def test_create_rejects_line_name_with_by_project() -> None:
+    with pytest.raises(SystemExit) as exc:
+        build_parser().parse_args(
+            [
+                "create",
+                "--start",
+                "2026-03-01",
+                "--end",
+                "2026-03-31",
+                "--line-name",
+                "X",
+                "--by-project",
+            ]
+        )
+
+    assert exc.value.code == 2
 
 
 @pytest.mark.asyncio
@@ -722,9 +756,8 @@ def _patch_run_pipeline(monkeypatch, summary):
     monkeypatch.setattr(
         "invoicing.__main__.fetch_summary", AsyncMock(return_value=summary)
     )
-    monkeypatch.setattr(
-        "invoicing.__main__.create_invoice_draft", AsyncMock(return_value=draft)
-    )
+    create_mock = AsyncMock(return_value=draft)
+    monkeypatch.setattr("invoicing.__main__.create_invoice_draft", create_mock)
     fire_mock = AsyncMock()
     monkeypatch.setattr("invoicing.__main__.fire_invoice", fire_mock)
     monkeypatch.setattr(
@@ -734,7 +767,12 @@ def _patch_run_pipeline(monkeypatch, summary):
         return_value={"message_sent": True, "pdf_uploaded": True, "ts": "123"}
     )
     monkeypatch.setattr("invoicing.__main__.send_invoice_notification", send_mock)
-    return {"fire": fire_mock, "send": send_mock, "draft": draft}
+    return {
+        "create": create_mock,
+        "fire": fire_mock,
+        "send": send_mock,
+        "draft": draft,
+    }
 
 
 @pytest.mark.asyncio
@@ -750,10 +788,17 @@ async def test_cmd_run_approved_fires_and_notifies(
     mocks = _patch_run_pipeline
 
     await cmd_run(
-        Namespace(start="2026-03-01", end="2026-03-31", rate=100.0, dry_run=False),
+        Namespace(
+            start="2026-03-01",
+            end="2026-03-31",
+            rate=100.0,
+            dry_run=False,
+            by_project=True,
+        ),
         settings,
     )
 
+    assert len(mocks["create"].await_args.args[4]) == 2
     mocks["fire"].assert_awaited_once()
     mocks["send"].assert_awaited_once()
     output = capsys.readouterr().out

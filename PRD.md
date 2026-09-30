@@ -58,7 +58,7 @@ Claude: Proforma created (#FV-2026-001). Finalizing...
 - **Default**: exactly one line summarizing all Clockify hours in the period
   - Name: `Software development (<start> — <end>)`
   - Quantity: `total_hours` · Unit: `hrs` · Unit price: hourly rate · VAT: `DEFAULT_VAT_RATE`
-- **`--line-name NAME`**: exact override of the line name (no period suffix)
+- **`--line-name NAME`** (`create` only): exact override of the line name (no period suffix); can't be combined with `--by-project`
 - **`--by-project`** (`create` and `run`): one line per Clockify project instead, named `<project> (<start> — <end>)`, entries without a project grouped as `(no project)`
 - The preview still shows the per-project breakdown for reviewing tracked time, whatever the line mode
 

@@ -69,5 +69,5 @@ If user rejects at step 2, stop. If something goes wrong after step 3, use `dele
 - No classes where functions suffice — keep it flat and functional
 - Currency is CZK, VAT default 0% (configurable via DEFAULT_VAT_RATE)
 - Invoice `issued_on` is the last day of the calendar month of `period_end` (set in `invoicing/workflows.py`); due date inherits the Fakturoid splatnost default unless `create --due-on YYYY-MM-DD` is passed
-- Invoices have one line `Software development (<start> — <end>)` with all hours (`--line-name` overrides the name); `--by-project` on `create`/`run` splits into one line per Clockify project
+- Invoices have one line `Software development (<start> — <end>)` with all hours (`create --line-name` overrides the name); `--by-project` on `create`/`run` splits into one line per Clockify project and can't be combined with `--line-name`
 - `uv run` to execute anything (not raw `python`)

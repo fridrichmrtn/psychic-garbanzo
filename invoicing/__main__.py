@@ -78,14 +78,14 @@ def build_invoice_lines(
             "name": (
                 line_name
                 if line_name is not None
-                else f"{project} ({summary.period_start} — {summary.period_end})"
+                else f"{label} ({summary.period_start} — {summary.period_end})"
             ),
             "quantity": quantity,
             "unit_name": "hrs",
             "unit_price": rate,
             "vat_rate": vat_rate,
         }
-        for project, quantity in hours.items()
+        for label, quantity in hours.items()
     ]
 
 
@@ -611,11 +611,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=_valid_date,
         help="Maturity/due date (YYYY-MM-DD); converted to Fakturoid 'due' days",
     )
-    create_p.add_argument(
+    line_mode = create_p.add_mutually_exclusive_group()
+    line_mode.add_argument(
         "--line-name",
-        help="Exact name for the invoice line(s)",
+        help="Exact name for the single invoice line",
     )
-    create_p.add_argument(
+    line_mode.add_argument(
         "--by-project",
         action="store_true",
         help="One line per Clockify project instead of a single summary line",
