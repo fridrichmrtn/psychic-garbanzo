@@ -79,14 +79,36 @@ def summary() -> ClockifySummary:
     )
 
 
-def test_build_invoice_lines_output_shape() -> None:
-    assert build_invoice_lines(
-        {"Project A": 1.25, "Project B": 0.75},
-        100.0,
-        21,
-        "2026-03-01",
-        "2026-03-31",
-    ) == [
+def test_build_invoice_lines_defaults_to_single_generic_line(
+    summary: ClockifySummary,
+) -> None:
+    assert build_invoice_lines(summary, 100.0, 21) == [
+        {
+            "name": "Software development (2026-03-01 — 2026-03-31)",
+            "quantity": 2.0,
+            "unit_name": "hrs",
+            "unit_price": 100.0,
+            "vat_rate": 21,
+        },
+    ]
+
+
+def test_build_invoice_lines_line_name_override_is_exact(
+    summary: ClockifySummary,
+) -> None:
+    assert build_invoice_lines(summary, 100.0, 21, line_name="EMOTIKA_SELFCODE") == [
+        {
+            "name": "EMOTIKA_SELFCODE",
+            "quantity": 2.0,
+            "unit_name": "hrs",
+            "unit_price": 100.0,
+            "vat_rate": 21,
+        },
+    ]
+
+
+def test_build_invoice_lines_by_project(summary: ClockifySummary) -> None:
+    assert build_invoice_lines(summary, 100.0, 21, by_project=True) == [
         {
             "name": "Project A (2026-03-01 — 2026-03-31)",
             "quantity": 1.25,
@@ -95,33 +117,7 @@ def test_build_invoice_lines_output_shape() -> None:
             "vat_rate": 21,
         },
         {
-            "name": "Project B (2026-03-01 — 2026-03-31)",
-            "quantity": 0.75,
-            "unit_name": "hrs",
-            "unit_price": 100.0,
-            "vat_rate": 21,
-        },
-    ]
-
-
-def test_build_invoice_lines_line_name_override_is_exact() -> None:
-    assert build_invoice_lines(
-        {"Project A": 1.25, "Project B": 0.75},
-        100.0,
-        21,
-        "2026-05-01",
-        "2026-05-31",
-        line_name="EMOTIKA_SELFCODE",
-    ) == [
-        {
-            "name": "EMOTIKA_SELFCODE",
-            "quantity": 1.25,
-            "unit_name": "hrs",
-            "unit_price": 100.0,
-            "vat_rate": 21,
-        },
-        {
-            "name": "EMOTIKA_SELFCODE",
+            "name": "(no project) (2026-03-01 — 2026-03-31)",
             "quantity": 0.75,
             "unit_name": "hrs",
             "unit_price": 100.0,
@@ -282,10 +278,7 @@ async def test_cmd_create_passes_due_on_and_line_name(
     )
 
     lines = create_mock.await_args.args[4]
-    assert [line["name"] for line in lines] == [
-        "EMOTIKA_SELFCODE",
-        "EMOTIKA_SELFCODE",
-    ]
+    assert [line["name"] for line in lines] == ["EMOTIKA_SELFCODE"]
     assert create_mock.await_args.kwargs["due_on"] == "2026-06-20"
     json.loads(capsys.readouterr().out)
 

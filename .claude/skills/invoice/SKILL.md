@@ -14,6 +14,7 @@ Full invoicing pipeline: fetch hours, preview, get approval, create proforma, fi
 - `--rate N` (optional, uses DEFAULT_HOURLY_RATE from .env)
 - `--due-on YYYY-MM-DD` (optional, sets invoice maturity date)
 - `--line-name NAME` (optional, exact name to use on every invoice line)
+- `--by-project` (optional, one line per Clockify project instead of a single summary line)
 - `--dry-run` (optional, stop after preview — same as /preview)
 
 ## Steps
@@ -24,11 +25,12 @@ Parse the JSON output. If `total_hours` is 0, tell the user and stop.
 
 ### 2. Show preview and ask for approval
 Present the same summary as /preview (hours, project breakdown, rate, subtotal, VAT, total).
+State that the invoice will have a single line — `Software development (<start> — <end>)`, or the `--line-name` value — carrying all hours, unless `--by-project` was given.
 **Ask the user explicitly**: "Create this invoice?" — do NOT proceed without a clear "yes".
 
 ### 3. Create proforma invoice
-Run: `uv run python -m invoicing create --start <start> --end <end> --rate <rate> [--due-on <due-on>] [--line-name "<line-name>"]`
-Pass `--due-on` and `--line-name` through when the user provided them.
+Run: `uv run python -m invoicing create --start <start> --end <end> --rate <rate> [--due-on <due-on>] [--line-name "<line-name>"] [--by-project]`
+Pass `--due-on`, `--line-name` and `--by-project` through when the user provided them.
 Parse the JSON output to get `invoice_id`, `invoice_number`, `total`, `issued_on`, `due_on`, `fakturoid_url`.
 The proforma is created with `issued_on` = last day of the calendar month of `--end`; `due_on` is explicit only when `--due-on` is passed, otherwise Fakturoid uses the account default.
 

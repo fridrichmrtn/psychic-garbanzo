@@ -11,9 +11,8 @@ Freelance invoicing pipeline: **Clockify** (time tracking) → **Fakturoid** (Cz
 ## Setup
 
 ```bash
-uv sync                  # install deps
+uv sync --extra dev      # install deps incl. dev (pytest, ruff, pre-commit)
 cp .env.example .env     # fill in API keys
-uv sync --group dev      # install pytest
 ```
 
 ## CLI Usage
@@ -28,6 +27,7 @@ Step-by-step (for Claude Code orchestration):
 uv run python -m invoicing fetch   --start 2026-03-01 --end 2026-03-31
 uv run python -m invoicing create  --start 2026-03-01 --end 2026-03-31 --rate 100
 uv run python -m invoicing create  --start 2026-05-01 --end 2026-05-31 --rate 100 --due-on 2026-06-20 --line-name EMOTIKA_SELFCODE
+uv run python -m invoicing create  --start 2026-03-01 --end 2026-03-31 --rate 100 --by-project
 uv run python -m invoicing fire    --invoice-id 123
 uv run python -m invoicing delete  --invoice-id 123
 uv run python -m invoicing notify  --invoice-id 123
@@ -69,4 +69,5 @@ If user rejects at step 2, stop. If something goes wrong after step 3, use `dele
 - No classes where functions suffice — keep it flat and functional
 - Currency is CZK, VAT default 0% (configurable via DEFAULT_VAT_RATE)
 - Invoice `issued_on` is the last day of the calendar month of `period_end` (set in `invoicing/workflows.py`); due date inherits the Fakturoid splatnost default unless `create --due-on YYYY-MM-DD` is passed
+- Invoices have one line `Software development (<start> — <end>)` with all hours (`--line-name` overrides the name); `--by-project` on `create`/`run` splits into one line per Clockify project
 - `uv run` to execute anything (not raw `python`)

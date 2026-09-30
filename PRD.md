@@ -51,6 +51,16 @@ Claude: Proforma created (#FV-2026-001). Finalizing...
 - Use MCP `slack_send_message` for notification (not webhook)
 - Handle edge cases: zero hours, API errors, user cancellation
 - Support `--dry-run` equivalent (just preview, no invoice)
+- Pass `--due-on`, `--line-name` and `--by-project` through to `create` when given
+
+### Invoice Lines
+
+- **Default**: exactly one line summarizing all Clockify hours in the period
+  - Name: `Software development (<start> — <end>)`
+  - Quantity: `total_hours` · Unit: `hrs` · Unit price: hourly rate · VAT: `DEFAULT_VAT_RATE`
+- **`--line-name NAME`**: exact override of the line name (no period suffix)
+- **`--by-project`** (`create` and `run`): one line per Clockify project instead, named `<project> (<start> — <end>)`, entries without a project grouped as `(no project)`
+- The preview still shows the per-project breakdown for reviewing tracked time, whatever the line mode
 
 ---
 

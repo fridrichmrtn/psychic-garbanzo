@@ -24,6 +24,7 @@ from datetime import datetime
 
 import httpx
 
+from invoicing.clockify import ClockifySummary
 from invoicing.config import InvoicingSettings
 from invoicing.fakturoid import (
     delete_invoice,
@@ -51,32 +52,40 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+GENERIC_LINE_NAME = "Software development"
+
+
 def build_invoice_lines(
-    by_project: dict[str, float],
+    summary: ClockifySummary,
     rate: float,
     vat_rate: int,
-    period_start: str,
-    period_end: str,
     line_name: str | None = None,
+    by_project: bool = False,
 ) -> list[dict]:
-    """Build Fakturoid invoice line items with per-project breakdown.
+    """Build Fakturoid invoice line items.
 
-    When ``line_name`` is given, every line uses that exact name, preserving
-    the per-project hour breakdown across lines.
+    By default a single generic line carries all hours; ``by_project`` splits
+    them into one line per Clockify project. When ``line_name`` is given, every
+    line uses that exact name.
     """
+    hours = (
+        hours_by_project(summary)
+        if by_project
+        else {GENERIC_LINE_NAME: summary.total_hours}
+    )
     return [
         {
             "name": (
                 line_name
                 if line_name is not None
-                else f"{project} ({period_start} — {period_end})"
+                else f"{project} ({summary.period_start} — {summary.period_end})"
             ),
-            "quantity": hours,
+            "quantity": quantity,
             "unit_name": "hrs",
             "unit_price": rate,
             "vat_rate": vat_rate,
         }
-        for project, hours in by_project.items()
+        for project, quantity in hours.items()
     ]
 
 
@@ -169,12 +178,11 @@ async def cmd_create(args: argparse.Namespace, settings: InvoicingSettings) -> N
             sys.exit(0)
 
         lines = build_invoice_lines(
-            hours_by_project(summary),
+            summary,
             rate,
             settings.default_vat_rate,
-            summary.period_start,
-            summary.period_end,
             line_name=getattr(args, "line_name", None),
+            by_project=getattr(args, "by_project", False),
         )
         draft = await create_invoice_draft(
             client,
@@ -428,11 +436,10 @@ async def cmd_run(args: argparse.Namespace, settings: InvoicingSettings) -> None
         # Step 2: Fakturoid — create proforma
         print("\n[2/4] Creating proforma invoice in Fakturoid...")
         lines = build_invoice_lines(
-            hours_by_project(summary),
+            summary,
             rate,
             settings.default_vat_rate,
-            summary.period_start,
-            summary.period_end,
+            by_project=getattr(args, "by_project", False),
         )
         draft = await create_invoice_draft(
             client,
@@ -575,6 +582,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument(
         "--dry-run", action="store_true", help="Preview only, no invoice"
     )
+    run_p.add_argument(
+        "--by-project",
+        action="store_true",
+        help="One line per Clockify project instead of a single summary line",
+    )
 
     # Step: fetch time entries
     fetch_p = sub.add_parser("fetch", help="Fetch Clockify time entries (JSON)")
@@ -601,7 +613,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     create_p.add_argument(
         "--line-name",
-        help="Override the name on every invoice line (keeps per-project breakdown)",
+        help="Exact name for the invoice line(s)",
+    )
+    create_p.add_argument(
+        "--by-project",
+        action="store_true",
+        help="One line per Clockify project instead of a single summary line",
     )
 
     # Step: fire (finalize)
