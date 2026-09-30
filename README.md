@@ -20,7 +20,7 @@ Generate an API key for fetching time entries.
 
 ### Fakturoid
 
-Create an OAuth app so the tool can issue invoices on your behalf.
+This tool talks directly to the [Fakturoid API v3](https://www.fakturoid.cz/api/v3) using OAuth 2.0 client credentials — it does not use any of Fakturoid's pre-built integrations (Propojení). Create an OAuth app so the tool can issue invoices on your behalf.
 
 1. Log in to [Fakturoid](https://app.fakturoid.cz)
 2. Go to **Settings** → **Developer** → **OAuth Apps** → create a new app
@@ -53,8 +53,7 @@ cp .env.example .env     # copy the template
 # fill in the values from the setup steps above
 # see .env.example for all available variables
 
-uv sync                  # install dependencies
-uv sync --group dev      # install dev dependencies (pytest)
+uv sync --extra dev      # install dependencies incl. dev (pytest, ruff, pre-commit)
 ```
 
 ## Usage
@@ -83,12 +82,15 @@ Create a proforma invoice in Fakturoid:
 uv run python -m invoicing create --start 2026-03-01 --end 2026-03-31 --rate 100
 ```
 
-Optional create flags:
+By default the invoice has a single line, `Software development (<start> — <end>)`, carrying all hours. Optional create flags:
 
 ```bash
 uv run python -m invoicing create \
   --start 2026-05-01 --end 2026-05-31 --rate 100 \
   --due-on 2026-06-20 --line-name EMOTIKA_SELFCODE
+
+# one line per Clockify project instead of a single summary line
+uv run python -m invoicing create --start 2026-03-01 --end 2026-03-31 --rate 100 --by-project
 ```
 
 Finalize the proforma:
@@ -139,13 +141,13 @@ When using this project with [Claude Code](https://docs.anthropic.com/en/docs/cl
 **`/preview`** `[--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N]`
 Fetch hours from Clockify and display a cost summary. Read-only — no invoice is created.
 
-**`/invoice`** `[--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N] [--due-on YYYY-MM-DD] [--line-name NAME] [--dry-run]`
+**`/invoice`** `[--start YYYY-MM-DD] [--end YYYY-MM-DD] [--rate N] [--due-on YYYY-MM-DD] [--line-name NAME | --by-project] [--dry-run]`
 Full pipeline: fetch hours → show preview → ask for approval → create proforma → fire → notify via Slack.
 
 **`/notify`** `--invoice-id ID` or `--invoice-number FV-123 --hours 10 --amount "1000 CZK" --client "Acme" --period "..."`
 Send or re-send an invoice notification to Slack. With `--invoice-id`, details and PDF are fetched automatically. The manual form sends a text-only message.
 
-**`/yolo`** `[--rate N] [--due-on YYYY-MM-DD] [--line-name NAME]`
+**`/yolo`** `[--rate N] [--due-on YYYY-MM-DD] [--line-name NAME | --by-project]`
 Invoice the last complete calendar month — no preview, no approval. Fetches hours, creates and fires the invoice, and notifies via Slack in one shot.
 
 > All commands default to the current month and `DEFAULT_HOURLY_RATE` from `.env` when arguments are omitted.
